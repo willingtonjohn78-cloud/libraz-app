@@ -389,29 +389,38 @@
       // render initial list (in case user opens)
       renderList();
     })();
-    </script>
-    <script src="script.js"></script>
-     <script>
-    function bookNow() {
-      const name = document.getElementById("name").value;
-      const phone = document.getElementById("phone").value;
+    <script src="price-data.js"></script>
+<script src="script.js"></script>
+   <script> 
+document.getElementById("bookingForm").addEventListener("submit", function(e) {
+  e.preventDefault();
 
-      fetch("/api/book", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ name, phone })
-      })
-      .then(res => res.json())
-      .then(data => {
-        alert(data.message);
-        console.log(data);
-      })
-      .catch(err => {
-        console.error("Error:", err);
-      });
-    }
-  </script>
+  const name = document.getElementById("name").value;
+  const phone = document.getElementById("phone").value;
+  const email = document.getElementById("email").value;
+  const promoCode = document.getElementById("promoCode").value;
+
+  fetch("/api/book", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name,
+      phone,
+      email,
+      promoCode
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    alert(data.message);
+    console.log(data);
+  })
+  .catch(err => {
+    console.error("Error:", err);
+  });
+});
+</script>
   </body>
   </html>
