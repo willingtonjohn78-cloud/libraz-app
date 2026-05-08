@@ -1,6 +1,8 @@
 (
   function () {
-  const API_BASE = window.API_BASE || window.location.origin;
+  const API_BASE =
+    window.API_BASE ||
+    (window.location.port === "5500" ? "http://localhost:3000" : window.location.origin);
   const allowedStatuses = ["Pending", "Confirmed", "Completed", "Cancelled"];
   const priceCatalog = Array.isArray(window.PRICE_CATALOG) ? window.PRICE_CATALOG : [];
   const BOOKING_DRAFT_KEY = "bookingDraft";
@@ -28,7 +30,21 @@
   }
 
   function phoneIsValid(phone) {
-    return /^[0-9+\s-]{7,20}$/.test(phone || "");
+    return /^\d{3}-\d{7}$/.test(phone || "");
+  }
+
+  function buildPhoneValue(countryCode, localPhone) {
+    return `${String(countryCode || "").trim()} ${String(localPhone || "").trim()}`.trim();
+  }
+
+  function splitPhoneValue(value) {
+    const raw = String(value || "").trim();
+    const match = raw.match(/^(\+\d+)\s*(.*)$/);
+    if (!match) return { countryCode: "+92", phone: raw };
+    return {
+      countryCode: match[1] || "+92",
+      phone: (match[2] || "").trim(),
+    };
   }
 
   async function api(path, options = {}) {
@@ -71,6 +87,7 @@
     const btnText = btn.querySelector(".btn-text");
     const serviceRowsEl = document.getElementById("serviceRows");
     const addServiceBtn = document.getElementById("addServiceBtn");
+    const countryCodeSelect = form.countryCode;
     const totalBillValue = document.getElementById("totalBillValue");
 
     function categoryOptionsHtml() {
@@ -103,8 +120,18 @@
         .join("");
     }
 
-    function updateServiceDisplay(row) {
-      // No label needed for inline display
+    function updateServiceDisplay(row, categoryName) {
+      const toggleBtn = row.querySelector(".service-dropdown-toggle");
+      const serviceChipRow = row.querySelector(".service-chip-row");
+      if (!toggleBtn || !serviceChipRow) return;
+      if (!categoryName) {
+        toggleBtn.textContent = "Select service";
+        serviceChipRow.classList.add("hidden");
+        toggleBtn.classList.remove("open");
+        return;
+      }
+      const selectedCount = serviceChipRow.querySelectorAll(".service-chip-checkbox:checked").length;
+      toggleBtn.textContent = selectedCount > 0 ? `${selectedCount} service(s) selected` : "Select service";
     }
 
     function attachServiceChipHandlers(chipRow) {
@@ -112,6 +139,9 @@
         checkbox.addEventListener("change", () => {
           const chip = checkbox.closest(".service-chip");
           if (chip) chip.classList.toggle("selected", checkbox.checked);
+          const row = chipRow.closest(".service-row");
+          const category = row?.querySelector(".service-category")?.value || "";
+          updateServiceDisplay(row, category);
           recalcTotalAndRateLabels();
         });
       });
@@ -156,6 +186,7 @@
           </select>
           <div class="service-rate-box">Rate(s): <span class="service-rate">-</span></div>
         </div>
+        <button type="button" class="service-dropdown-toggle">Select service</button>
         <div class="service-chip-row" role="group" aria-label="Service options">
           ${serviceOptionsHtml(prefill.category || "", prefill.services || [])}
         </div>
@@ -163,17 +194,37 @@
       `;
 
       const categorySelect = row.querySelector(".service-category");
+      const serviceToggle = row.querySelector(".service-dropdown-toggle");
       const serviceChipRow = row.querySelector(".service-chip-row");
       const removeBtn = row.querySelector(".remove-service-btn");
 
       categorySelect.value = prefill.category || "";
       serviceChipRow.innerHTML = serviceOptionsHtml(categorySelect.value, prefill.services || []);
       attachServiceChipHandlers(serviceChipRow);
+      serviceChipRow.classList.add("hidden");
+      serviceToggle.classList.remove("open");
+      updateServiceDisplay(row, categorySelect.value);
 
       categorySelect.addEventListener("change", () => {
         serviceChipRow.innerHTML = serviceOptionsHtml(categorySelect.value, []);
         attachServiceChipHandlers(serviceChipRow);
+        if (categorySelect.value) {
+          serviceChipRow.classList.add("hidden");
+          serviceToggle.classList.remove("open");
+        } else {
+          serviceChipRow.classList.add("hidden");
+          serviceToggle.classList.remove("open");
+        }
+        updateServiceDisplay(row, categorySelect.value);
         recalcTotalAndRateLabels();
+      });
+      serviceToggle.addEventListener("click", () => {
+        if (!categorySelect.value) {
+          showToast("Please select a category first.", "error");
+          return;
+        }
+        const isHidden = serviceChipRow.classList.toggle("hidden");
+        serviceToggle.classList.toggle("open", !isHidden);
       });
       removeBtn.addEventListener("click", () => {
         row.remove();
@@ -211,7 +262,12 @@
       try {
         const draft = JSON.parse(draftRaw);
         form.name.value = draft.name || "";
-        form.phone.value = draft.phone || "";
+        const parsedPhone = splitPhoneValue(draft.phone);
+        if (countryCodeSelect) {
+          const hasOption = Array.from(countryCodeSelect.options).some((option) => option.value === parsedPhone.countryCode);
+          countryCodeSelect.value = hasOption ? parsedPhone.countryCode : "+92";
+        }
+        form.phone.value = parsedPhone.phone || "";
         form.email.value = draft.email || "";
         form.promoCode.value = draft.promoCode || "";
         serviceRowsEl.innerHTML = "";
@@ -234,6 +290,14 @@
 
     if (priceCatalog.length > 0) addServiceRow();
     hydrateDraftIfAny();
+    btn.disabled = false;
+    spinner.classList.add("hidden");
+    btnText.textContent = "Book Now";
+    window.addEventListener("pageshow", () => {
+      btn.disabled = false;
+      spinner.classList.add("hidden");
+      btnText.textContent = "Book Now";
+    });
     addServiceBtn?.addEventListener("click", () => addServiceRow());
 
     form.addEventListener("submit", async (event) => {
@@ -241,6 +305,7 @@
 
       const name = form.name.value.trim();
       const phone = form.phone.value.trim();
+      const countryCode = (countryCodeSelect?.value || "+92").trim();
       const email = form.email.value.trim();
       const promoCode = form.promoCode.value.trim();
       const selectedServices = collectSelectedServices();
@@ -270,7 +335,14 @@
       btn.disabled = true;
       spinner.classList.remove("hidden");
       btnText.textContent = "Preparing invoice...";
-      const draft = { name, phone, email, promoCode, selectedServices, totalBill };
+      const draft = {
+        name,
+        phone: buildPhoneValue(countryCode, phone),
+        email,
+        promoCode,
+        selectedServices,
+        totalBill,
+      };
       sessionStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify(draft));
       window.location.href = "success.html";
     });
@@ -333,6 +405,7 @@
         successView?.classList.remove("hidden");
         nameNode.textContent = `${data.booking?.name || draft.name}, we look forward to seeing you soon.`;
         nameNode.classList.remove("hidden");
+        confirmBtn.textContent = "Confirm Booking";
       } catch (error) {
         showToast(error.message || "Failed to confirm booking.", "error");
         confirmBtn.disabled = false;
