@@ -76,8 +76,8 @@ h1 {
 
 .phone-field-row {
   display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .service-selection {
@@ -97,7 +97,7 @@ h1 {
 
 .service-row {
   display: grid;
-  grid-template-columns: 1.05fr auto;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   border: 1px solid rgba(255, 111, 173, 0.18);
   border-radius: 20px;
@@ -106,11 +106,44 @@ h1 {
   box-shadow: 0 12px 24px rgba(255, 126, 182, 0.08);
 }
 
+.service-row-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.service-row-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+
 .service-row-inner {
   display: grid;
-  grid-template-columns: 1.2fr auto;
+  grid-template-columns: 1.25fr auto;
   gap: 16px;
   align-items: center;
+}
+
+.service-row-left .remove-service-btn {
+  width: 100%;
+  border-radius: 999px;
+  padding: 12px 14px;
+  text-align: center;
+}
+
+.service-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.service-actions .service-dropdown-toggle {
+  width: auto;
+  min-width: 220px;
 }
 
 .service-row select {
@@ -124,7 +157,9 @@ h1 {
   padding: 14px 22px 14px 18px;
   min-height: 52px;
   color: #432d56;
-  font-weight: 600;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236d28d9' viewBox='0 0 16 16'%3E%3Cpath d='M4.646 6.646a.5.5 0 0 1 .708 0L8 9.293l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 18px center;
@@ -166,7 +201,7 @@ h1 {
   padding: 14px 22px 14px 18px;
   min-height: 52px;
   color: #432d56;
-  font-weight: 600;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236d28d9' viewBox='0 0 16 16'%3E%3Cpath d='M4.646 6.646a.5.5 0 0 1 .708 0L8 9.293l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
@@ -275,9 +310,16 @@ h1 {
   font-size: 13px;
 }
 
+.service-row-right .service-dropdown-toggle {
+  width: 100%;
+  min-width: unset;
+}
+
 .service-rate-box {
   font-size: 13px;
   color: #6a4f79;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .remove-service-btn {
@@ -289,13 +331,6 @@ h1 {
   cursor: pointer;
   font-weight: 600;
 }
-
-.remove-service-btn {
-  border: 1px solid #f5c2d9;
-  background: #fff;
-  color: #d92f7a;
-  border-radius: 10px;
-  padding: 9px 10px;
   cursor: pointer;
   font-weight: 600;
 }
@@ -746,6 +781,87 @@ th {
   .service-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* Modal styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  background: var(--white);
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: var(--shadow);
+  max-width: 400px;
+  width: 90%;
+  position: relative;
+  z-index: 1001;
+}
+
+.modal-content h3 {
+  margin: 0 0 10px 0;
+  color: var(--text-dark);
+}
+
+.modal-content p {
+  margin: 0 0 20px 0;
+  color: var(--text-dark);
+}
+
+.modal-summary {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f7f4ff;
+  border: 1px solid #e7dffd;
+  color: var(--text-dark);
+  line-height: 1.5;
+  font-size: 15px;
+}
+
+.modal-summary div {
+  margin-bottom: 8px;
+}
+
+#deletePasswordSection {
+  margin-bottom: 20px;
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 16px;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 @media (max-width: 480px) {

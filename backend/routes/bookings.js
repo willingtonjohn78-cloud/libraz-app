@@ -118,4 +118,22 @@ router.patch("/:id/status", requireAdmin, async (req, res) => {
   }
 });
 
+router.delete("/:id", requireAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const bookings = await readBookings();
+    const index = bookings.findIndex((b) => b.id === id);
+    if (index === -1) {
+      return res.status(404).json({ message: "Booking not found." });
+    }
+
+    bookings.splice(index, 1);
+    await writeBookings(bookings);
+    return res.json({ message: "Booking deleted." });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to delete booking." });
+  }
+});
+
 module.exports = router;

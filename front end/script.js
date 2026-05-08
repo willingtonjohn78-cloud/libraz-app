@@ -90,6 +90,29 @@
     const countryCodeSelect = form.countryCode;
     const totalBillValue = document.getElementById("totalBillValue");
 
+    // Add input formatting
+    form.name.addEventListener('input', function() {
+      this.value = this.value.replace(/\b\w/g, l => l.toUpperCase());
+    });
+    form.promoCode.addEventListener('input', function() {
+      this.value = this.value.toUpperCase();
+    });
+    form.phone.addEventListener('input', function() {
+      let value = this.value.replace(/\D/g, '');
+      if (value.length > 3) {
+        value = value.slice(0, 3) + '-' + value.slice(3, 10);
+      }
+      this.value = value;
+    });
+
+    // Hide service chip rows when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.service-row') && !e.target.closest('#addServiceBtn')) {
+        document.querySelectorAll('.service-chip-row').forEach(row => row.classList.add('hidden'));
+        document.querySelectorAll('.service-dropdown-toggle').forEach(btn => btn.classList.remove('open'));
+      }
+    });
+
     function categoryOptionsHtml() {
       const options = ['<option value="">Select category</option>'];
       priceCatalog.forEach((entry) => {
@@ -158,19 +181,17 @@
           rateTextEl.textContent = "-";
           return;
         }
-        const rates = [];
+        let rowTotal = 0;
         selectedNames.forEach((serviceName) => {
           const matched = findService(category, serviceName);
           if (matched) {
-            rates.push(matched.rate);
-            if (typeof matched.amount === "number") total += matched.amount;
+            if (typeof matched.amount === "number") {
+              rowTotal += matched.amount;
+              total += matched.amount;
+            }
           }
         });
-        if (rates.length) {
-          rateTextEl.textContent = rates.join(", ");
-        } else {
-          rateTextEl.textContent = "-";
-        }
+        rateTextEl.textContent = rowTotal ? formatPkr(rowTotal) : "-";
       });
       totalBillValue.textContent = formatPkr(total);
       return total;
@@ -180,17 +201,19 @@
       const row = document.createElement("div");
       row.className = "service-row";
       row.innerHTML = `
-        <div class="service-row-inner">
+        <div class="service-row-left">
           <select class="service-category" aria-label="Service category">
             ${categoryOptionsHtml()}
           </select>
+          <button type="button" class="remove-service-btn">Remove</button>
+        </div>
+        <div class="service-row-right">
+          <button type="button" class="service-dropdown-toggle">Select service</button>
           <div class="service-rate-box">Rate(s): <span class="service-rate">-</span></div>
         </div>
-        <button type="button" class="service-dropdown-toggle">Select service</button>
         <div class="service-chip-row" role="group" aria-label="Service options">
           ${serviceOptionsHtml(prefill.category || "", prefill.services || [])}
         </div>
-        <button type="button" class="remove-service-btn">Remove</button>
       `;
 
       const categorySelect = row.querySelector(".service-category");
@@ -463,6 +486,7 @@
           <div class="action-row">
             <select class="status-select" aria-label="Change status for ${name}">${statusOptionsHtml(booking.status)}</select>
             <a class="call-link" href="${normalizePhone(booking.phone)}">Call</a>
+            <button class="delete-btn" type="button">Delete</button>
           </div>
         </td>
       </tr>
@@ -499,6 +523,7 @@
         <div class="action-row booking-card-mobile__actions">
           <select class="status-select" aria-label="Change status for ${name}">${statusOptionsHtml(booking.status)}</select>
           <a class="call-link" href="${normalizePhone(booking.phone)}">Call</a>
+          <button class="delete-btn" type="button">Delete</button>
         </div>
       </article>
     `;
@@ -545,9 +570,18 @@
     const lockDashboardBtn = document.getElementById("lockDashboardBtn");
     const downloadAllBtn = document.getElementById("downloadAllBtn");
     const downloadContactsBtn = document.getElementById("downloadContactsBtn");
+    const deleteModal = document.getElementById("deleteModal");
+    const deleteModalMessage = document.getElementById("deleteModalMessage");
+    const deleteBookingSummary = document.getElementById("deleteBookingSummary");
+    const deletePasswordSection = document.getElementById("deletePasswordSection");
+    const deletePasswordInput = document.getElementById("deletePasswordInput");
+    const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
+    const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
 
     let adminPassword = sessionStorage.getItem("adminPassword") || "";
     let currentBookings = [];
+    let currentDeleteId = null;
+    let deletePasswordValidated = sessionStorage.getItem("deletePasswordValidated") === "true";
 
     async function loadBookings() {
       const data = await api("/api/bookings", {
@@ -595,6 +629,8 @@
 
     lockDashboardBtn?.addEventListener("click", () => {
       sessionStorage.removeItem("adminPassword");
+      sessionStorage.removeItem("deletePasswordValidated");
+      deletePasswordValidated = false;
       window.location.href = "index.html";
     });
 
@@ -646,23 +682,57 @@
       showToast("All bookings file downloaded.", "success");
     });
 
-    downloadContactsBtn?.addEventListener("click", () => {
-      if (!currentBookings.length) {
-        showToast("No contacts available to export.", "error");
-        return;
+    confirmDeleteBtn.addEventListener("click", async () => {
+      if (!deletePasswordValidated) {
+        const password = deletePasswordInput.value.trim();
+        if (password !== "Master1") {
+          showToast("Incorrect password.", "error");
+          return;
+        }
+        deletePasswordValidated = true;
+        sessionStorage.setItem("deletePasswordValidated", "true");
       }
-      const rows = currentBookings.map((booking) => [
-        booking.id || "",
-        booking.name || "",
-        booking.phone || "",
-        new Date(booking.createdAt).toLocaleString(),
-      ]);
-      downloadExcelLikeFile(
-        "libraz-contacts.xls",
-        ["Booking ID", "Name", "Phone", "Booking Date/Time"],
-        rows
-      );
-      showToast("Contacts file downloaded.", "success");
+
+      try {
+        await api(`/api/bookings/${currentDeleteId}`, {
+          method: "DELETE",
+          headers: {
+            "x-admin-password": adminPassword,
+          },
+        });
+        document.querySelectorAll(`[data-id="${currentDeleteId}"]`).forEach((row) => row.remove());
+        deleteModal.classList.add("hidden");
+        currentDeleteId = null;
+        showToast("Booking deleted.", "success");
+      } catch (error) {
+        showToast(error.message || "Delete failed.", "error");
+      }
+    });
+
+    deletePasswordInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        confirmDeleteBtn.click();
+      }
+    });
+
+    cancelDeleteBtn.addEventListener("click", () => {
+      deleteModal.classList.add("hidden");
+      currentDeleteId = null;
+    });
+
+    deleteModal.addEventListener("click", (event) => {
+      if (event.target === deleteModal || event.target.classList.contains("modal-backdrop")) {
+        deleteModal.classList.add("hidden");
+        currentDeleteId = null;
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !deleteModal.classList.contains("hidden")) {
+        deleteModal.classList.add("hidden");
+        currentDeleteId = null;
+      }
     });
 
     dashboard.addEventListener("change", async (event) => {
@@ -692,6 +762,46 @@
       }
     });
 
+    dashboard.addEventListener("click", async (event) => {
+      const deleteBtn = event.target.closest(".delete-btn");
+      if (!deleteBtn) return;
+      const row = deleteBtn.closest("tr, .booking-card-mobile");
+      const id = row?.dataset.id;
+      if (!id) return;
+
+      currentDeleteId = id;
+      const booking = currentBookings.find((item) => item.id === id);
+      if (booking) {
+        deleteBookingSummary.innerHTML = `
+          <div><strong>Name:</strong> ${escapeHtml(booking.name || "-")}</div>
+          <div><strong>Phone:</strong> ${escapeHtml(booking.phone || "-")}</div>
+          <div><strong>Total:</strong> ${formatPkr(Number(booking.totalBill) || 0)}</div>
+          <div><strong>Services:</strong> ${escapeHtml(
+            Array.isArray(booking.selectedServices) && booking.selectedServices.length
+              ? booking.selectedServices.map((item) => `${item.category}: ${item.service}`).join(" | ")
+              : "-"
+          )}</div>
+        `;
+      } else {
+        deleteBookingSummary.textContent = "Review the selected booking before confirming deletion.";
+      }
+
+      if (deletePasswordValidated) {
+        deleteModalMessage.textContent = "Delete password already verified for this session. Confirm deletion.";
+        deletePasswordSection.classList.add("hidden");
+      } else {
+        deleteModalMessage.textContent = "Enter the delete password to confirm deletion of this booking:";
+        deletePasswordSection.classList.remove("hidden");
+        deletePasswordInput.value = "";
+        deletePasswordInput.focus();
+      }
+
+      deleteModal.classList.remove("hidden");
+      if (deletePasswordValidated) {
+        confirmDeleteBtn.focus();
+      }
+    });
+
     if (adminPassword) {
       passwordInput.value = adminPassword;
       unlock();
@@ -703,6 +813,34 @@
     if (!container || priceCatalog.length === 0) return;
     const searchInput = document.getElementById("priceSearchInput");
     const filtersWrap = document.getElementById("priceCategoryFilters");
+    const pageLinks = document.querySelectorAll('.price-list-page a');
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromAdmin = urlParams.get('from') === 'admin';
+
+    if (fromAdmin) {
+      sessionStorage.setItem('lockAdminAfterPriceList', 'true');
+    }
+
+    function clearAdminLockOnReturn() {
+      if (sessionStorage.getItem('lockAdminAfterPriceList') === 'true') {
+        sessionStorage.removeItem('adminPassword');
+        sessionStorage.removeItem('deletePasswordValidated');
+        sessionStorage.removeItem('lockAdminAfterPriceList');
+      }
+    }
+
+    pageLinks.forEach((link) => {
+      link.addEventListener('click', (event) => {
+        if (fromAdmin) {
+          clearAdminLockOnReturn();
+        }
+      });
+    });
+
+    if (fromAdmin) {
+      window.addEventListener('beforeunload', clearAdminLockOnReturn);
+      window.addEventListener('pagehide', clearAdminLockOnReturn);
+    }
 
     let activeCategory = "All";
     let term = "";
