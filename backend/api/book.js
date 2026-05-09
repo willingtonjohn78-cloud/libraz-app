@@ -1,4 +1,4 @@
-export default function handler(req, res) {
+function handler(req, res) {
   if (req.method === "POST") {
     const booking = req.body;
 
@@ -13,3 +13,5 @@ export default function handler(req, res) {
 
   res.status(405).json({ message: "Method not allowed" });
 }
+
+module.exports = handler;
